@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Passport records</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, sans-serif;
+      color: #172033;
+      background: #f3f6fb;
+    }
+
+    body {
+      box-sizing: border-box;
+      min-height: 100vh;
+      margin: 0;
+      padding: 32px 24px;
+    }
+
+    main {
+      box-sizing: border-box;
+      width: min(100%, 1200px);
+      margin: 0 auto;
+      padding: 28px;
+      border: 1px solid #dce3ee;
+      border-radius: 16px;
+      background: white;
+      box-shadow: 0 12px 36px #17203312;
+    }
+
+    .heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.6rem;
+    }
+
+    #count, #status {
+      color: #536078;
+    }
+
+    #count {
+      margin: 6px 0 0;
+    }
+
+    .button {
+      flex: 0 0 auto;
+      padding: 10px 18px;
+      border-radius: 8px;
+      color: white;
+      background: #155eef;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .button-secondary {
+      color: #155eef;
+      background: #eaf1ff;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .signout {
+      padding: 10px 18px;
+      border: 0;
+      border-radius: 8px;
+      color: #155eef;
+      background: #eaf1ff;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid #dce3ee;
+      border-radius: 8px;
+    }
+
+    .delete-action {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+
+    .button-danger {
+      color: white;
+      background: #b42318;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      white-space: nowrap;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid #e8edf4;
+      text-align: left;
+    }
+
+    th {
+      background: #f3f6fb;
+      font-size: 0.875rem;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    #status[data-state="error"] {
+      color: #b42318;
+    }
+
+    @media (max-width: 520px) {
+      body {
+        padding: 16px 12px;
+      }
+
+      main {
+        padding: 18px;
+      }
+
+      .heading {
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="heading">
+      <div>
+        <h1>Passport records</h1>
+        <p id="count" aria-live="polite">Loading records...</p>
+      </div>
+      <div class="actions">
+        <a class="button" href="/FileCaptureForm.html">New</a>
+        <a class="button button-secondary" href="/Edit.html">Edit</a>
+        <button class="signout" id="signout" type="button">Sign out</button>
+      </div>
+    </div>
+    <p id="status" role="status" aria-live="polite"></p>
+    <div class="table-wrap">
+      <table>
+        <thead id="table-head"></thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+    <div class="delete-action">
+      <a class="button button-danger" href="/Delete.html">Delete</a>
+    </div>
+  </main>
+  <script>
+    const count = document.querySelector("#count");
+    const status = document.querySelector("#status");
+    const tableHead = document.querySelector("#table-head");
+    const tableBody = document.querySelector("#table-body");
+
+    document.querySelector("#signout").addEventListener("click", async () => {
+      try {
+        const response = await fetch("/auth/signout", { method: "POST" });
+        if (!response.ok) throw new Error("Could not sign out.");
+        window.location.assign("/");
+      } catch (error) {
+        status.dataset.state = "error";
+        status.textContent = error.message || "Could not sign out.";
+      }
+    });
+
+    function appendCell(row, value, heading = false) {
+      const cell = document.createElement(heading ? "th" : "td");
+      cell.textContent = value == null ? "" : String(value);
+      row.append(cell);
+    }
+
+    async function loadRecords() {
+      count.textContent = "Loading records...";
+      status.textContent = "";
+      status.dataset.state = "";
+      tableHead.replaceChildren();
+      tableBody.replaceChildren();
+
+      try {
+        const response = await fetch("/records", { cache: "no-store" });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || "Could not load passport records.");
+        }
+
+        const headerRow = document.createElement("tr");
+        result.columns.forEach((column) => appendCell(headerRow, column, true));
+        tableHead.append(headerRow);
+
+        result.records.forEach((record) => {
+          const row = document.createElement("tr");
+          result.columns.forEach((column) => appendCell(row, record[column]));
+          tableBody.append(row);
+        });
+
+        count.textContent = `${result.records.length} record${result.records.length === 1 ? "" : "s"}`;
+        if (result.records.length === 0) {
+          const row = document.createElement("tr");
+          const cell = document.createElement("td");
+          cell.colSpan = Math.max(result.columns.length, 1);
+          cell.textContent = "No passport records found.";
+          row.append(cell);
+          tableBody.append(row);
+        }
+      } catch (error) {
+        count.textContent = "Records unavailable";
+        status.dataset.state = "error";
+        status.textContent = error.message || "Could not load passport records.";
+      }
+    }
+
+    loadRecords();
+  </script>
+</body>
+</html>

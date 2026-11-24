@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in | Passport records</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, sans-serif;
+      color: #172033;
+      background: #f3f6fb;
+    }
+
+    body {
+      box-sizing: border-box;
+      display: grid;
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px;
+      place-items: center;
+    }
+
+    main {
+      box-sizing: border-box;
+      width: min(100%, 440px);
+      padding: 32px;
+      border: 1px solid #dce3ee;
+      border-radius: 16px;
+      background: white;
+      box-shadow: 0 12px 36px #17203312;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.6rem;
+    }
+
+    p {
+      color: #536078;
+      line-height: 1.5;
+    }
+
+    .switch {
+      display: flex;
+      gap: 8px;
+      margin: 20px 0;
+    }
+
+    .switch button {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #c8d1df;
+      border-radius: 8px;
+      color: #155eef;
+      background: white;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .switch button[aria-pressed="true"] {
+      border-color: #155eef;
+      color: white;
+      background: #155eef;
+    }
+
+    label {
+      display: block;
+      margin: 16px 0 8px;
+      font-weight: 600;
+    }
+
+    input {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #c8d1df;
+      border-radius: 8px;
+      font: inherit;
+    }
+
+    #submit {
+      width: 100%;
+      margin-top: 20px;
+      padding: 12px 16px;
+      border: 0;
+      border-radius: 8px;
+      color: white;
+      background: #155eef;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    #submit:disabled {
+      cursor: wait;
+      opacity: 0.65;
+    }
+
+    #status {
+      min-height: 1.5em;
+      margin-bottom: 0;
+      overflow-wrap: anywhere;
+    }
+
+    #status[data-state="error"] {
+      color: #b42318;
+    }
+
+    @media (max-width: 520px) {
+      main {
+        padding: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1 id="title">Sign in</h1>
+    <p>Sign in or create an account to access passport records.</p>
+    <div class="switch" aria-label="Account action">
+      <button id="signin-tab" type="button" aria-pressed="true">Sign in</button>
+      <button id="signup-tab" type="button" aria-pressed="false">Sign up</button>
+    </div>
+    <form id="auth-form">
+      <label for="username">Username</label>
+      <input id="username" name="username" type="text" maxlength="100" autocomplete="username" required>
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" minlength="8" maxlength="1024" autocomplete="current-password" required>
+      <button id="submit" type="submit">Sign in</button>
+    </form>
+    <p id="status" role="status" aria-live="polite"></p>
+  </main>
+  <script>
+    const form = document.querySelector("#auth-form");
+    const title = document.querySelector("#title");
+    const passwordInput = document.querySelector("#password");
+    const submitButton = document.querySelector("#submit");
+    const status = document.querySelector("#status");
+    const signinTab = document.querySelector("#signin-tab");
+    const signupTab = document.querySelector("#signup-tab");
+    let mode = "signin";
+
+    function setMode(nextMode) {
+      mode = nextMode;
+      const signingUp = mode === "signup";
+      title.textContent = signingUp ? "Sign up" : "Sign in";
+      submitButton.textContent = title.textContent;
+      passwordInput.autocomplete = signingUp ? "new-password" : "current-password";
+      passwordInput.minLength = signingUp ? 8 : 1;
+      signinTab.setAttribute("aria-pressed", String(!signingUp));
+      signupTab.setAttribute("aria-pressed", String(signingUp));
+      status.textContent = "";
+      status.dataset.state = "";
+    }
+
+    signinTab.addEventListener("click", () => setMode("signin"));
+    signupTab.addEventListener("click", () => setMode("signup"));
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+
+      submitButton.disabled = true;
+      status.dataset.state = "";
+      status.textContent = mode === "signup" ? "Creating account..." : "Signing in...";
+
+      try {
+        const response = await fetch(`/auth/${mode}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: form.elements.username.value,
+            password: form.elements.password.value
+          })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Authentication failed.");
+        window.location.assign("/Home.html");
+      } catch (error) {
+        status.dataset.state = "error";
+        status.textContent = error.message || "Authentication failed. Try again.";
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

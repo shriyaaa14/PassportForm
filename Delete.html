@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Delete passport record</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, sans-serif;
+      color: #172033;
+      background: #f3f6fb;
+    }
+
+    body {
+      box-sizing: border-box;
+      display: grid;
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px;
+      place-items: center;
+    }
+
+    main {
+      box-sizing: border-box;
+      width: min(100%, 760px);
+      padding: 32px;
+      border: 1px solid #dce3ee;
+      border-radius: 16px;
+      background: white;
+      box-shadow: 0 12px 36px #17203312;
+    }
+
+    .heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.6rem;
+    }
+
+    p {
+      color: #536078;
+      line-height: 1.5;
+    }
+
+    .warning {
+      color: #b42318;
+    }
+
+    .button {
+      flex: 0 0 auto;
+      padding: 10px 18px;
+      border-radius: 8px;
+      color: #155eef;
+      background: #eaf1ff;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .field label {
+      display: block;
+      margin: 16px 0 8px;
+      font-weight: 600;
+    }
+
+    .field input, select {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #c8d1df;
+      border-radius: 8px;
+      background: white;
+      font: inherit;
+    }
+
+    .field input:read-only {
+      background: #f3f6fb;
+      color: #536078;
+    }
+
+    fieldset {
+      min-width: 0;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 20px;
+      padding: 12px 16px;
+      border: 0;
+      border-radius: 8px;
+      color: white;
+      background: #b42318;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.65;
+    }
+
+    #status {
+      min-height: 1.5em;
+      margin-bottom: 0;
+      overflow-wrap: anywhere;
+    }
+
+    #status[data-state="error"] {
+      color: #b42318;
+    }
+
+    #status[data-state="success"] {
+      color: #067647;
+    }
+
+    @media (max-width: 520px) {
+      body {
+        padding: 16px;
+      }
+
+      main {
+        padding: 22px;
+      }
+
+      .heading {
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="heading">
+      <h1>Delete passport record</h1>
+      <a class="button" href="/Home.html">Home</a>
+    </div>
+    <p>Select the record to delete and review its details before confirming.</p>
+    <p class="warning">Deleting a record is permanent and cannot be undone.</p>
+    <div class="field">
+      <label for="record-select">Passport record</label>
+      <select id="record-select" disabled>
+        <option value="">Loading records...</option>
+      </select>
+    </div>
+    <form id="delete-form">
+      <fieldset id="record-fields" disabled>
+        <div id="fields"></div>
+        <button id="delete-button" type="submit">Delete selected record</button>
+      </fieldset>
+    </form>
+    <p id="status" role="status" aria-live="polite"></p>
+  </main>
+  <script>
+    const recordSelect = document.querySelector("#record-select");
+    const recordFields = document.querySelector("#record-fields");
+    const fieldsContainer = document.querySelector("#fields");
+    const deleteForm = document.querySelector("#delete-form");
+    const deleteButton = document.querySelector("#delete-button");
+    const status = document.querySelector("#status");
+    let columns = [];
+    let primaryKeys = [];
+    let records = [];
+
+    function recordLabel(record, index) {
+      const name = [record.first_name, record.last_name].filter(Boolean).join(" ");
+      const passportNumber = record.passport_number == null ? "" : String(record.passport_number);
+      const identity = primaryKeys.map((column) => `${column}=${record[column]}`).join(", ");
+      return [
+        name || `Record ${index + 1}`,
+        passportNumber ? `(${passportNumber})` : "",
+        identity ? `[${identity}]` : ""
+      ].filter(Boolean).join(" ");
+    }
+
+    function renderSelectedRecord() {
+      const selectedIndex = recordSelect.value;
+      const record = selectedIndex === "" ? undefined : records[Number(selectedIndex)];
+      fieldsContainer.replaceChildren();
+      recordFields.disabled = !record || primaryKeys.length === 0;
+      if (!record) return;
+
+      columns.forEach((column) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "field";
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        input.id = `field-${column}`;
+        input.readOnly = true;
+        input.value = record[column] == null ? "" : String(record[column]);
+        label.htmlFor = input.id;
+        label.textContent = column.replaceAll("_", " ");
+        wrapper.append(label, input);
+        fieldsContainer.append(wrapper);
+      });
+    }
+
+    async function loadRecords() {
+      status.textContent = "";
+      status.dataset.state = "";
+      recordSelect.disabled = true;
+      recordFields.disabled = true;
+      recordSelect.replaceChildren(new Option("Loading records...", ""));
+
+      try {
+        const response = await fetch("/records", { cache: "no-store" });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || "Could not load passport records.");
+        }
+
+        columns = result.columns;
+        primaryKeys = result.primary_keys;
+        records = result.records;
+        recordSelect.replaceChildren(new Option(
+          records.length ? "Choose a record..." : "No passport records found",
+          ""
+        ));
+        records.forEach((record, index) => {
+          recordSelect.add(new Option(recordLabel(record, index), String(index)));
+        });
+        recordSelect.disabled = records.length === 0;
+        if (!primaryKeys.length && records.length) {
+          status.dataset.state = "error";
+          status.textContent = "Records cannot be deleted because the table has no primary key.";
+        }
+      } catch (error) {
+        recordSelect.replaceChildren(new Option("Records unavailable", ""));
+        status.dataset.state = "error";
+        status.textContent = error.message || "Could not load passport records.";
+      }
+    }
+
+    recordSelect.addEventListener("change", () => {
+      status.textContent = "";
+      status.dataset.state = "";
+      renderSelectedRecord();
+      if (records.length && !primaryKeys.length) {
+        status.dataset.state = "error";
+        status.textContent = "Records cannot be deleted because the table has no primary key.";
+      }
+    });
+
+    deleteForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const selectedIndex = recordSelect.value;
+      const record = selectedIndex === "" ? undefined : records[Number(selectedIndex)];
+      if (!record) return;
+
+      const label = recordLabel(record, Number(selectedIndex));
+      if (!window.confirm(`Permanently delete this passport record?\n\n${label}`)) return;
+
+      const key = Object.fromEntries(primaryKeys.map((column) => [column, record[column]]));
+      deleteButton.disabled = true;
+      recordSelect.disabled = true;
+      status.dataset.state = "";
+      status.textContent = "Deleting record...";
+
+      try {
+        const response = await fetch("/records/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key })
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || "Could not delete passport record.");
+        }
+
+        records.splice(Number(selectedIndex), 1);
+        recordSelect.replaceChildren(new Option(
+          records.length ? "Choose a record..." : "No passport records found",
+          ""
+        ));
+        records.forEach((remaining, index) => {
+          recordSelect.add(new Option(recordLabel(remaining, index), String(index)));
+        });
+        fieldsContainer.replaceChildren();
+        recordFields.disabled = true;
+        recordSelect.disabled = records.length === 0;
+        status.dataset.state = "success";
+        status.textContent = result.message;
+      } catch (error) {
+        recordSelect.disabled = false;
+        status.dataset.state = "error";
+        status.textContent = error.message || "Could not delete passport record.";
+      } finally {
+        deleteButton.disabled = false;
+      }
+    });
+
+    loadRecords();
+  </script>
+</body>
+</html>
